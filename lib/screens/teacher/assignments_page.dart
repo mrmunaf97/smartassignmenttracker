@@ -5,6 +5,7 @@ import '../../services/subject_service.dart';
 import 'package:open_file/open_file.dart';
 import '../common/pdf_viewer_screen.dart';
 import '../common/color.dart';
+import '../common/image_viewer_screen.dart';
 
 class AssignmentsPage extends StatefulWidget {
   final bool deleteMode;
@@ -230,7 +231,7 @@ class AssignmentDetailPage extends StatelessWidget {
                   const Text('Uploaded Document:'),
                   const SizedBox(height: 8),
                   ElevatedButton.icon(
-                    icon: const Icon(Icons.picture_as_pdf),
+                    icon: Icon(_getFileIcon(assignment.fileUrl!)),
                     label: const Text('Open Document'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
@@ -243,19 +244,29 @@ class AssignmentDetailPage extends StatelessWidget {
                     ),
                     onPressed: () async {
                       final url = assignment.fileUrl!;
-                      // TODO: Fetch the file from your API here if needed
-                      // Example:
-                      // final apiFileUrl = await fetchFileUrlFromApi(assignment.id);
-                      // Use apiFileUrl instead of url below if needed
-                      if (url.startsWith('http')) {
+                      final lowerUrl = url.toLowerCase();
+                      if (lowerUrl.endsWith('.pdf')) {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) => PdfViewerScreen(fileUrl: url),
                           ),
                         );
+                      } else if (lowerUrl.endsWith('.jpg') ||
+                          lowerUrl.endsWith('.jpeg') ||
+                          lowerUrl.endsWith('.png') ||
+                          lowerUrl.endsWith('.gif')) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ImageViewerScreen(imageUrl: url),
+                          ),
+                        );
                       } else {
-                        await OpenFile.open(url);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('Unsupported file type')),
+                        );
                       }
                     },
                   ),
@@ -267,5 +278,15 @@ class AssignmentDetailPage extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  IconData _getFileIcon(String url) {
+    final lowerUrl = url.toLowerCase();
+    if (lowerUrl.endsWith('.pdf')) return Icons.picture_as_pdf;
+    if (lowerUrl.endsWith('.jpg') ||
+        lowerUrl.endsWith('.jpeg') ||
+        lowerUrl.endsWith('.png') ||
+        lowerUrl.endsWith('.gif')) return Icons.image;
+    return Icons.insert_drive_file;
   }
 }

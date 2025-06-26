@@ -13,6 +13,7 @@ import 'services/offline_service.dart';
 import 'dart:async';
 import 'screens/common/color.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,6 +21,11 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   await Hive.initFlutter();
+  await Supabase.initialize(
+    url: 'https://quasratvbucqwnboxybu.supabase.co',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF1YXNyYXR2YnVjcXduYm94eWJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5MjMwMTIsImV4cCI6MjA2NjQ5OTAxMn0.-m8K-d4lWwB4u3e-QuRKzk3RwsXTHExfxKKglK8-0Zk',
+  );
 
   // Initialize subjects
   final subjectService = SubjectService();

@@ -8,6 +8,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../common/color.dart';
 import 'package:open_file/open_file.dart';
 import '../common/pdf_viewer_screen.dart';
+import 'dart:typed_data';
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../common/image_viewer_screen.dart';
 
 class AssignmentListScreen extends StatelessWidget {
   final Assignment assignment;
@@ -37,7 +42,7 @@ class AssignmentListScreen extends StatelessWidget {
                   const Text('Assignment Document:'),
                   const SizedBox(height: 8),
                   ElevatedButton.icon(
-                    icon: const Icon(Icons.picture_as_pdf),
+                    icon: Icon(_getFileIcon(assignment.fileUrl!)),
                     label: const Text('View Document'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
@@ -50,15 +55,29 @@ class AssignmentListScreen extends StatelessWidget {
                     ),
                     onPressed: () async {
                       final url = assignment.fileUrl!;
-                      if (url.startsWith('http')) {
+                      final lowerUrl = url.toLowerCase();
+                      if (lowerUrl.endsWith('.pdf')) {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) => PdfViewerScreen(fileUrl: url),
                           ),
                         );
+                      } else if (lowerUrl.endsWith('.jpg') ||
+                          lowerUrl.endsWith('.jpeg') ||
+                          lowerUrl.endsWith('.png') ||
+                          lowerUrl.endsWith('.gif')) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ImageViewerScreen(imageUrl: url),
+                          ),
+                        );
                       } else {
-                        await OpenFile.open(url);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('Unsupported file type')),
+                        );
                       }
                     },
                   ),
@@ -97,6 +116,16 @@ class AssignmentListScreen extends StatelessWidget {
       ),
     );
   }
+
+  IconData _getFileIcon(String url) {
+    final lowerUrl = url.toLowerCase();
+    if (lowerUrl.endsWith('.pdf')) return Icons.picture_as_pdf;
+    if (lowerUrl.endsWith('.jpg') ||
+        lowerUrl.endsWith('.jpeg') ||
+        lowerUrl.endsWith('.png') ||
+        lowerUrl.endsWith('.gif')) return Icons.image;
+    return Icons.insert_drive_file;
+  }
 }
 
 class AssignmentSubmissionScreen extends StatefulWidget {
@@ -110,18 +139,27 @@ class AssignmentSubmissionScreen extends StatefulWidget {
 
 class _AssignmentSubmissionScreenState
     extends State<AssignmentSubmissionScreen> {
-  String? _filePath;
   final _remarksController = TextEditingController();
   final _assignmentService = AssignmentService();
   final _offlineService = OfflineService();
   bool _loading = false;
   String? _error;
+  String? _fileName;
+  String? _filePath;
+  Uint8List? _fileBytes;
 
   void _pickFile() async {
     final result = await FilePicker.platform.pickFiles();
-    if (result != null && result.files.single.path != null) {
+    if (result != null) {
       setState(() {
-        _filePath = result.files.single.path;
+        _fileName = result.files.single.name;
+        if (kIsWeb) {
+          _fileBytes = result.files.single.bytes;
+          _filePath = null;
+        } else {
+          _filePath = result.files.single.path;
+          _fileBytes = null;
+        }
       });
     }
   }
@@ -134,11 +172,54 @@ class _AssignmentSubmissionScreenState
     try {
       final user = await _offlineService.getUser();
       final studentId = user?['uid'] ?? 'unknown';
+      String? fileUrlToSave;
+      if ((_filePath != null && _filePath!.isNotEmpty) ||
+          (kIsWeb && _fileBytes != null)) {
+        Uint8List? uploadBytes;
+        String? fileName = _fileName;
+        if (kIsWeb) {
+          uploadBytes = _fileBytes;
+          if (uploadBytes == null)
+            throw Exception('No file bytes found for web upload');
+        } else {
+          if (_filePath == null)
+            throw Exception('No file path found for mobile upload');
+          uploadBytes = await File(_filePath!).readAsBytes();
+        }
+        final storage = Supabase.instance.client.storage;
+        final uploadPath =
+            'submissions/${DateTime.now().millisecondsSinceEpoch}_$fileName';
+        String? contentType = 'application/octet-stream';
+        if (fileName != null) {
+          final lower = fileName.toLowerCase();
+          if (lower.endsWith('.pdf')) {
+            contentType = 'application/pdf';
+          } else if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+            contentType = 'image/jpeg';
+          } else if (lower.endsWith('.png')) {
+            contentType = 'image/png';
+          } else if (lower.endsWith('.gif')) {
+            contentType = 'image/gif';
+          }
+        }
+        final uploadRes = await storage.from('uploads').uploadBinary(
+              uploadPath,
+              uploadBytes!,
+              fileOptions: FileOptions(contentType: contentType),
+            );
+        if (uploadRes.isEmpty) throw Exception('File upload failed');
+        fileUrlToSave = storage.from('uploads').getPublicUrl(uploadPath);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$fileName loaded successfully')),
+          );
+        }
+      }
       final submission = Submission(
         id: '',
         assignmentId: widget.assignment.id,
         studentId: studentId,
-        fileUrl: _filePath, // TODO: Upload file and get URL
+        fileUrl: fileUrlToSave,
         submittedAt: DateTime.now(),
         grade: null,
         remarks: _remarksController.text,
@@ -177,9 +258,7 @@ class _AssignmentSubmissionScreenState
         child: Column(
           children: [
             ListTile(
-              title: Text(_filePath == null
-                  ? 'Pick File'
-                  : getFileNameFromPath(_filePath)),
+              title: Text(_fileName == null ? 'Pick File' : _fileName!),
               trailing: const Icon(Icons.attach_file),
               onTap: _pickFile,
             ),
