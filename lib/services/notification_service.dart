@@ -12,8 +12,12 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   Future<void> init(BuildContext context) async {
-    // Request permissions
-    await _firebaseMessaging.requestPermission();
+    // Request permissions, but do not block or throw if denied
+    try {
+      await _firebaseMessaging.requestPermission();
+    } catch (_) {
+      // Ignore errors, proceed regardless of permission
+    }
 
     // Initialize local notifications
     const AndroidInitializationSettings initializationSettingsAndroid =

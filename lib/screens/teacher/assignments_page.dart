@@ -9,6 +9,7 @@ import '../common/image_viewer_screen.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io';
 import 'package:flutter/services.dart' show NetworkAssetBundle;
+import 'dart:html' as html;
 
 class AssignmentsPage extends StatefulWidget {
   final bool deleteMode;
@@ -282,30 +283,19 @@ class _AssignmentDocumentOpenerState extends State<AssignmentDocumentOpener> {
       ),
       onPressed: () async {
         if (kIsWeb) {
+          setState(() => _loading = true);
           final url = widget.fileUrl;
-          final lowerUrl = url.toLowerCase();
-          if (lowerUrl.endsWith('.pdf')) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => PdfViewerScreen(fileUrl: url),
-              ),
-            );
-          } else if (lowerUrl.endsWith('.jpg') ||
-              lowerUrl.endsWith('.jpeg') ||
-              lowerUrl.endsWith('.png') ||
-              lowerUrl.endsWith('.gif')) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ImageViewerScreen(imageUrl: url),
-              ),
-            );
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Unsupported file type')),
-            );
-          }
+          final fileName = url.split('/').last;
+          final anchor = html.AnchorElement(href: url)
+            ..download = fileName
+            ..target = 'blank';
+          html.document.body!.append(anchor);
+          anchor.click();
+          anchor.remove();
+          setState(() => _loading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$fileName downloaded')),
+          );
           return;
         }
         setState(() => _loading = true);
